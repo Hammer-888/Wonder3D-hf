@@ -3,8 +3,7 @@ title: Wonder3D
 emoji: 🚀
 colorFrom: indigo
 colorTo: pink
-sdk: docker
-sdk_version: 3.43.2
+sdk: streamlit
 app_file: app.py
 pinned: false
 license: cc-by-sa-3.0
