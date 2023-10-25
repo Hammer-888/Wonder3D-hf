@@ -70,9 +70,9 @@ class SAMAPI:
     def get_instance(sam_checkpoint=None):
         if SAMAPI.predictor is None:
             if sam_checkpoint is None:
-                sam_checkpoint = "tmp/sam_vit_h_4b8939.pth"
+                sam_checkpoint = "./sam_pt/sam_vit_h_4b8939.pth"
             if not os.path.exists(sam_checkpoint):
-                os.makedirs('tmp', exist_ok=True)
+                os.makedirs('sam_pt', exist_ok=True)
                 urllib.request.urlretrieve(
                     "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth",
                     sam_checkpoint
@@ -353,8 +353,6 @@ with results_container:
         torch.manual_seed(seed)
         img = Image.open(pic)
 
-        data = prepare_data(img)
-
         if max(img.size) > 1280:
             w, h = img.size
             w = round(1280 / max(img.size) * w)
@@ -374,6 +372,7 @@ with results_container:
         img = expand2square(img, (127, 127, 127, 0))
         # pipeline.set_progress_bar_config(disable=True)
         prog.progress(0.3, "Run cross-domain diffusion model")
+        data = prepare_data(img)
         normals_pred, images_pred = run_pipeline(pipeline, data, cfg_scale, seed)
         prog.progress(0.9, "finishing")
         left, right = st.columns(2)
