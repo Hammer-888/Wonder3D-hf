@@ -3,7 +3,7 @@ title: Wonder3D
 emoji: 🚀
 colorFrom: indigo
 colorTo: pink
-sdk: gradio
+sdk: docker
 sdk_version: 3.43.2
 app_file: app.py
 pinned: false

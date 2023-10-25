@@ -15,6 +15,7 @@ from mvdiffusion.models.unet_mv2d_condition import UNetMV2DConditionModel
 from mvdiffusion.data.single_image_dataset import SingleImageDataset as MVDiffusionDataset
 from mvdiffusion.pipelines.pipeline_mvdiffusion_image import MVDiffusionImagePipeline
 from diffusers import AutoencoderKL, DDPMScheduler, DDIMScheduler
+from einops import rearrange
 
 @dataclass
 class TestConfig:
@@ -53,6 +54,13 @@ iret = [
     for x in sorted(os.listdir(iret_base))
 ]
 
+def save_image(tensor):
+    ndarr = tensor.mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
+    # pdb.set_trace()
+    im = Image.fromarray(ndarr)
+    return ndarr
+
+weight_dtype = torch.float16
 
 class SAMAPI:
     predictor = None
@@ -62,7 +70,7 @@ class SAMAPI:
     def get_instance(sam_checkpoint=None):
         if SAMAPI.predictor is None:
             if sam_checkpoint is None:
-                sam_checkpoint = "tmp/sam_vit_h_4b8939.pth"
+                sam_checkpoint = "sam_pt/sam_vit_h_4b8939.pth"
             if not os.path.exists(sam_checkpoint):
                 os.makedirs('tmp', exist_ok=True)
                 urllib.request.urlretrieve(
@@ -164,6 +172,8 @@ def segment_6imgs(imgs):
     return Image.fromarray(result)
 
 def pack_6imgs(imgs):
+    import pdb
+    # pdb.set_trace()
     result = numpy.concatenate([
         numpy.concatenate([imgs[0], imgs[1]], axis=1),
         numpy.concatenate([imgs[2], imgs[3]], axis=1),
@@ -221,15 +231,15 @@ def check_dependencies():
 
 
 @st.cache_resource
-def load_wonder3d_pipeline(cfg):
+def load_wonder3d_pipeline():
     # Load scheduler, tokenizer and models.
     # noise_scheduler = DDPMScheduler.from_pretrained(cfg.pretrained_model_name_or_path, subfolder="scheduler")
     image_encoder = CLIPVisionModelWithProjection.from_pretrained(cfg.pretrained_model_name_or_path, subfolder="image_encoder", revision=cfg.revision)
     feature_extractor = CLIPImageProcessor.from_pretrained(cfg.pretrained_model_name_or_path, subfolder="feature_extractor", revision=cfg.revision)
     vae = AutoencoderKL.from_pretrained(cfg.pretrained_model_name_or_path, subfolder="vae", revision=cfg.revision)
     unet = UNetMV2DConditionModel.from_pretrained_2d(cfg.pretrained_unet_path, subfolder="unet", revision=cfg.revision, **cfg.unet_from_pretrained_kwargs)
+    unet.enable_xformers_memory_efficient_attention()
 
-    weight_dtype = torch.float16
     # Move text_encode and vae to gpu and cast to weight_dtype
     image_encoder.to(dtype=weight_dtype)
     vae.to(dtype=weight_dtype)
@@ -246,6 +256,53 @@ def load_wonder3d_pipeline(cfg):
     sys.main_lock = threading.Lock()
     return pipeline
 
+from mvdiffusion.data.single_image_dataset import SingleImageDataset
+def prepare_data(single_image):
+    dataset = SingleImageDataset(
+        root_dir = None,
+        num_views = 6,
+        img_wh=[256, 256],
+        bg_color='white',
+        crop_size=crop_size,
+        single_image=single_image
+    )
+    return dataset[0]
+
+
+def run_pipeline(pipeline, batch, guidance_scale, seed):
+
+    pipeline.set_progress_bar_config(disable=True)
+
+    generator = torch.Generator(device=pipeline.unet.device).manual_seed(seed)
+
+    # repeat  (2B, Nv, 3, H, W)
+    imgs_in = torch.cat([batch['imgs_in']]*2, dim=0).to(weight_dtype)
+    
+    # (2B, Nv, Nce)
+    camera_embeddings = torch.cat([batch['camera_embeddings']]*2, dim=0).to(weight_dtype)
+
+    task_embeddings = torch.cat([batch['normal_task_embeddings'], batch['color_task_embeddings']], dim=0).to(weight_dtype)
+
+    camera_embeddings = torch.cat([camera_embeddings, task_embeddings], dim=-1).to(weight_dtype)
+
+    # (B*Nv, 3, H, W)
+    imgs_in = rearrange(imgs_in, "Nv C H W -> (Nv) C H W")
+    # (B*Nv, Nce)
+    # camera_embeddings = rearrange(camera_embeddings, "B Nv Nce -> (B Nv) Nce")
+
+    out = pipeline(
+        imgs_in, camera_embeddings, generator=generator, guidance_scale=guidance_scale, 
+        output_type='pt', num_images_per_prompt=1, **cfg.pipe_validation_kwargs
+    ).images
+
+    bsz = out.shape[0] // 2
+    normals_pred = out[:bsz]
+    images_pred = out[bsz:]
+
+    normals_pred = [save_image(normals_pred[i]) for i in range(bsz)]
+    images_pred = [save_image(images_pred[i]) for i in range(bsz)]
+
+    return normals_pred, images_pred
 
 from utils.misc import load_config    
 from omegaconf import OmegaConf
@@ -257,26 +314,33 @@ schema = OmegaConf.structured(TestConfig)
 cfg = OmegaConf.merge(schema, cfg)
 
 check_dependencies()
-pipeline = load_wonder3d_pipeline(cfg)
+pipeline = load_wonder3d_pipeline()
 SAMAPI.get_instance()
 torch.set_grad_enabled(False)
 
-st.title("Wonder3D Demo")
+st.title("Wonder3D: Single Image to 3D using Cross-Domain Diffusion")
 # st.caption("For faster inference without waiting in queue, you may clone the space and run it yourself.")
-prog = st.progress(0.0, "Idle")
+
 pic = st.file_uploader("Upload an Image", key='imageinput', type=['png', 'jpg', 'webp'])
 left, right = st.columns(2)
+# with left:
+#     rem_input_bg = st.checkbox("Remove Input Background")
+# with right:
+#     rem_output_bg = st.checkbox("Remove Output Background")
 with left:
-    rem_input_bg = st.checkbox("Remove Input Background")
+    num_inference_steps = st.slider("Number of Inference Steps", 15, 100, 50)
+    # st.caption("Diffusion Steps. For general real or synthetic objects, around 28 is enough. For objects with delicate details such as faces (either realistic or illustration), you may need 75 or more steps.")
 with right:
-    rem_output_bg = st.checkbox("Remove Output Background")
-num_inference_steps = st.slider("Number of Inference Steps", 15, 100, 75)
-st.caption("Diffusion Steps. For general real or synthetic objects, around 28 is enough. For objects with delicate details such as faces (either realistic or illustration), you may need 75 or more steps.")
-cfg_scale = st.slider("Classifier Free Guidance Scale", 1.0, 10.0, 4.0)
-seed = st.text_input("Seed", "42")
-submit = False
-if st.button("Submit"):
-    submit = True
+    cfg_scale = st.slider("Classifier Free Guidance Scale", 1.0, 10.0, 3.0)
+with left:
+    seed = int(st.text_input("Seed", "42"))
+with right:
+    crop_size = int(st.text_input("crop_size", "192"))
+# submit = False
+# if st.button("Submit"):
+#     submit = True
+submit = True
+prog = st.progress(0.0, "Idle")
 results_container = st.container()
 sample_got = image_examples(iret, 4, 'rimageinput')
 if sample_got:
@@ -284,48 +348,47 @@ if sample_got:
 with results_container:
     if sample_got or submit:
         prog.progress(0.03, "Waiting in Queue...")
-        with sys.main_lock:
-            seed = int(seed)
-            torch.manual_seed(seed)
-            img = Image.open(pic)
-            if max(img.size) > 1280:
-                w, h = img.size
-                w = round(1280 / max(img.size) * w)
-                h = round(1280 / max(img.size) * h)
-                img = img.resize((w, h))
-            left, right = st.columns(2)
-            with left:
-                st.image(img)
-                st.caption("Input Image")
-            prog.progress(0.1, "Preparing Inputs")
-            if rem_input_bg:
-                with right:
-                    img = segment_img(img)
-                    st.image(img)
-                    st.caption("Input (Background Removed)")
-            img = expand2square(img, (127, 127, 127, 0))
-            pipeline.set_progress_bar_config(disable=True)
-            result = pipeline(
-                img,
-                num_inference_steps=num_inference_steps,
-                guidance_scale=cfg_scale,
-                generator=torch.Generator(pipeline.device).manual_seed(seed),
-                callback=lambda i, t, latents: prog.progress(0.1 + 0.8 * i / num_inference_steps, "Diffusion Step %d" % i)
-            ).images
-            bsz = result.shape[0] // 2
-            normals_pred = result[:bsz]
-            images_pred = result[bsz:]
-            prog.progress(0.9, "Post Processing")
-            left, right = st.columns(2)
-            with left:
-                st.image(pack_6imgs(normals_pred))
-                st.image(pack_6imgs(images_pred))
-                st.caption("Result")
-            if rem_output_bg:
-                normals_pred = segment_6imgs(normals_pred)
-                images_pred = segment_6imgs(images_pred)
-                with right:
-                    st.image(normals_pred)
-                    st.image(images_pred)
-                    st.caption("Result (Background Removed)")
-            prog.progress(1.0, "Idle")
+        
+        seed = int(seed)
+        torch.manual_seed(seed)
+        img = Image.open(pic)
+
+        data = prepare_data(img)
+
+        if max(img.size) > 1280:
+            w, h = img.size
+            w = round(1280 / max(img.size) * w)
+            h = round(1280 / max(img.size) * h)
+            img = img.resize((w, h))
+        left, right = st.columns(2)
+        with left:
+            st.caption("Input Image")
+            st.image(img)
+        prog.progress(0.1, "Preparing Inputs")
+        
+        with right:
+            img = segment_img(img)
+            st.caption("Input (Background Removed)")
+            st.image(img)
+            
+        img = expand2square(img, (127, 127, 127, 0))
+        # pipeline.set_progress_bar_config(disable=True)
+        prog.progress(0.3, "Run cross-domain diffusion model")
+        normals_pred, images_pred = run_pipeline(pipeline, data, cfg_scale, seed)
+        prog.progress(0.9, "finishing")
+        left, right = st.columns(2)
+        with left:
+            st.caption("Generated Normals")
+            st.image(pack_6imgs(normals_pred))
+            
+        with right:
+            st.caption("Generated Color Images")
+            st.image(pack_6imgs(images_pred))
+        # if rem_output_bg:
+        #     normals_pred = segment_6imgs(normals_pred)
+        #     images_pred = segment_6imgs(images_pred)
+        #     with right:
+        #         st.image(normals_pred)
+        #         st.image(images_pred)
+        #         st.caption("Result (Background Removed)")
+        prog.progress(1.0, "Idle")

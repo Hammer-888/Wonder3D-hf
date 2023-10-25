@@ -4,13 +4,13 @@ from packaging import version
 
 
 # ============ Register OmegaConf Recolvers ============= #
-OmegaConf.register_new_resolver('calc_exp_lr_decay_rate', lambda factor, n: factor**(1./n))
-OmegaConf.register_new_resolver('add', lambda a, b: a + b)
-OmegaConf.register_new_resolver('sub', lambda a, b: a - b)
-OmegaConf.register_new_resolver('mul', lambda a, b: a * b)
-OmegaConf.register_new_resolver('div', lambda a, b: a / b)
-OmegaConf.register_new_resolver('idiv', lambda a, b: a // b)
-OmegaConf.register_new_resolver('basename', lambda p: os.path.basename(p))
+# OmegaConf.register_new_resolver('calc_exp_lr_decay_rate', lambda factor, n: factor**(1./n))
+# OmegaConf.register_new_resolver('add', lambda a, b: a + b)
+# OmegaConf.register_new_resolver('sub', lambda a, b: a - b)
+# OmegaConf.register_new_resolver('mul', lambda a, b: a * b)
+# OmegaConf.register_new_resolver('div', lambda a, b: a / b)
+# OmegaConf.register_new_resolver('idiv', lambda a, b: a // b)
+# OmegaConf.register_new_resolver('basename', lambda p: os.path.basename(p))
 # ======================================================= #
 
 
