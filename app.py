@@ -66,7 +66,7 @@ class SAMAPI:
     predictor = None
 
     @staticmethod
-    @st.cache_resource
+    # @st.cache_resource
     def get_instance(sam_checkpoint=None):
         if SAMAPI.predictor is None:
             if sam_checkpoint is None:
