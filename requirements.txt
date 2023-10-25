@@ -12,7 +12,6 @@ trimesh==3.9.8
 pyhocon==0.3.57
 icecream==2.1.0
 PyMCubes==0.1.2
-xformers
 accelerate
 modelcards
 einops
@@ -28,3 +27,4 @@ torch_efficient_distloss
 tensorboard
 rembg
 segment_anything
+xformers==0.0.22
