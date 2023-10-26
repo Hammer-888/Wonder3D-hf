@@ -3,8 +3,8 @@ title: Wonder3D
 emoji: 🚀
 colorFrom: indigo
 colorTo: pink
-sdk: streamlit
-app_file: app.py
+sdk: gradio
+app_file: gradio_app.py
 pinned: false
 license: cc-by-sa-3.0
 ---
