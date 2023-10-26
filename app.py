@@ -321,7 +321,7 @@ torch.set_grad_enabled(False)
 st.title("Wonder3D: Single Image to 3D using Cross-Domain Diffusion")
 # st.caption("For faster inference without waiting in queue, you may clone the space and run it yourself.")
 
-pic = st.file_uploader("Upload an Image", key='imageinput', type=['png', 'jpg', 'webp'])
+pic = st.file_uploader("Upload an Image", key='imageinput', type=['png', 'jpg', 'webp', 'jpeg'])
 left, right = st.columns(2)
 # with left:
 #     rem_input_bg = st.checkbox("Remove Input Background")
@@ -342,7 +342,7 @@ with right:
 submit = True
 prog = st.progress(0.0, "Idle")
 results_container = st.container()
-sample_got = image_examples(iret, 4, 'rimageinput')
+sample_got = image_examples(iret, 5, 'rimageinput')
 if sample_got:
     pic = sample_got
 with results_container:
