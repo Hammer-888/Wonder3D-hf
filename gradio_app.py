@@ -47,6 +47,7 @@ _TITLE = '''Wonder3D: Single Image to 3D using Cross-Domain Diffusion'''
 _DESCRIPTION = '''
 <div>
 Generate consistent multi-view normals maps and color images.
+<a style="display:inline-block; margin-left: .5em" href='https://github.com/xxlong0/Wonder3D/'><img src='https://img.shields.io/github/stars/xxlong0/Wonder3D?style=social' /></a>
 </div>
 '''
 _GPU_ID = 0
@@ -332,10 +333,7 @@ def run_demo():
         first_stage = run_btn.click(fn=partial(preprocess, predictor), 
                         inputs=[input_image, input_processing], 
                         outputs=[processed_image_highres, processed_image], queue=True
-            )
-
-
-        first_stage.success(fn=partial(run_pipeline, pipeline, cfg), 
+            ).success(fn=partial(run_pipeline, pipeline, cfg), 
                         inputs=[processed_image_highres, scale_slider, steps_slider, seed, crop_size],
                         outputs=[view_1, view_2, view_3, view_4, view_5, view_6, normal_1, normal_2, normal_3, normal_4, normal_5, normal_6]
                         )
