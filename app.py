@@ -346,7 +346,7 @@ sample_got = image_examples(iret, 4, 'rimageinput')
 if sample_got:
     pic = sample_got
 with results_container:
-    if sample_got or submit:
+    if sample_got or pic is not None:
         prog.progress(0.03, "Waiting in Queue...")
         
         seed = int(seed)
