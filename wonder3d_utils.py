@@ -234,4 +234,4 @@ if __name__ == "__main__":
     plt.figure(len(outputs))
     for output in outputs:
         plt.imshow(output)
-    plt.show()
+        plt.show()
