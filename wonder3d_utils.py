@@ -222,7 +222,7 @@ if __name__ == "__main__":
         help="Number of Diffusion Inference Steps,15-100",
     )
     parser.add_argument("--seed", type=int, default=42, help="Seed")
-    parser.add_argument("--crop_size", type=int, default=224, help="Crop Size")
+    parser.add_argument("--crop_size", type=int, default=-1, help="Crop Size")
     parser.add_argument("--device", default="cuda", help="Device (cuda or cpu)")
 
     opt = parser.parse_args()
@@ -260,5 +260,6 @@ if __name__ == "__main__":
     output = wonder3d.refine(
         image, opt.guidance_scale, opt.steps, opt.seed, opt.crop_size
     )
+    torch.cuda.empty_cache()
     plt.imshow(output.float().cpu().numpy().transpose(0, 2, 3, 1))
     plt.show()
