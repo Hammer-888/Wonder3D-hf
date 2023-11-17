@@ -62,6 +62,19 @@ def preprocess_data(single_image, crop_size):
     return dataset[0]
 
 
+def tensor2pil(tensor):
+    img = (
+        tensor.mul(255)
+        .add_(0.5)
+        .clamp_(0, 255)
+        .permute(1, 2, 0)
+        .to("cpu", torch.uint8)
+        .numpy()
+    )
+    img = Image.fromarray(img)
+    return img
+
+
 def save_image(tensor):
     ndarr = (
         tensor.mul(255)
