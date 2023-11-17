@@ -18,6 +18,7 @@ from common import (
     save_image_to_disk,
     preprocess_data,
     expand2square,
+    tensor2pil,
 )
 
 
@@ -33,6 +34,7 @@ class Wonder3d(nn.Module):
         self.pipe = self.init_pipeline()
         torch.set_grad_enabled(False)
         self.pipe.to(self.device)
+        self.emmbedding = None
 
     def init_pipeline(self):
         """
@@ -86,7 +88,13 @@ class Wonder3d(nn.Module):
         )
         return pipeline
 
-    def run_pipeline(
+    def get_img_embeds(self, image: torch.Tensor):
+        # x: image tensor in [0, 1]
+        image = tensor2pil(image)
+        image = image.to(self.device)
+        self.emmbedding = image
+
+    def refine(
         self,
         single_image,
         guidance_scale,
@@ -112,7 +120,7 @@ class Wonder3d(nn.Module):
         # if chk_group is not None:
         #     write_image = "Write Results" in chk_group
 
-        batch = preprocess_data(single_image, crop_size)
+        batch = preprocess_data(self.emmbedding, crop_size)
 
         self.pipe.set_progress_bar_config(disable=True)
         seed = int(seed)
@@ -154,48 +162,50 @@ class Wonder3d(nn.Module):
         normals_pred = out[:bsz]
         images_pred = out[bsz:]
         num_views = 6
-        if write_image:
-            VIEWS = ["front", "front_right", "right", "back", "left", "front_left"]
-            cur_dir = os.path.join(
-                "./outputs", f"cropsize-{crop_size}-cfg{guidance_scale:.1f}"
-            )
+        # if write_image:
+        #     VIEWS = ["front", "front_right", "right", "back", "left", "front_left"]
+        #     cur_dir = os.path.join(
+        #         "./outputs", f"cropsize-{crop_size}-cfg{guidance_scale:.1f}"
+        #     )
 
-            scene = "scene"
-            scene_dir = os.path.join(cur_dir, scene)
-            normal_dir = os.path.join(scene_dir, "normals")
-            masked_colors_dir = os.path.join(scene_dir, "masked_colors")
-            os.makedirs(normal_dir, exist_ok=True)
-            os.makedirs(masked_colors_dir, exist_ok=True)
-            for j in range(num_views):
-                view = VIEWS[j]
-                normal = normals_pred[j]
-                color = images_pred[j]
+        #     scene = "scene"
+        #     scene_dir = os.path.join(cur_dir, scene)
+        #     normal_dir = os.path.join(scene_dir, "normals")
+        #     masked_colors_dir = os.path.join(scene_dir, "masked_colors")
+        #     os.makedirs(normal_dir, exist_ok=True)
+        #     os.makedirs(masked_colors_dir, exist_ok=True)
+        #     for j in range(num_views):
+        #         view = VIEWS[j]
+        #         normal = normals_pred[j]
+        #         color = images_pred[j]
 
-                normal_filename = f"normals_000_{view}.png"
-                rgb_filename = f"rgb_000_{view}.png"
-                normal = save_image_to_disk(
-                    normal, os.path.join(normal_dir, normal_filename)
-                )
-                color = save_image_to_disk(color, os.path.join(scene_dir, rgb_filename))
+        #         normal_filename = f"normals_000_{view}.png"
+        #         rgb_filename = f"rgb_000_{view}.png"
+        #         normal = save_image_to_disk(
+        #             normal, os.path.join(normal_dir, normal_filename)
+        #         )
+        #         color = save_image_to_disk(color, os.path.join(scene_dir, rgb_filename))
 
-                rm_normal = remove(normal)
-                rm_color = remove(color)
+        #         rm_normal = remove(normal)
+        #         rm_color = remove(color)
 
-                save_image_numpy(rm_normal, os.path.join(scene_dir, normal_filename))
-                save_image_numpy(
-                    rm_color, os.path.join(masked_colors_dir, rgb_filename)
-                )
+        #         save_image_numpy(rm_normal, os.path.join(scene_dir, normal_filename))
+        #         save_image_numpy(
+        #             rm_color, os.path.join(masked_colors_dir, rgb_filename)
+        #         )
 
-        normals_pred = [save_image(normals_pred[i]) for i in range(bsz)]
-        images_pred = [save_image(images_pred[i]) for i in range(bsz)]
+        # normals_pred = [save_image(normals_pred[i]) for i in range(bsz)]
+        # images_pred = [save_image(images_pred[i]) for i in range(bsz)]
 
-        out = images_pred + normals_pred
-        return out[0]
+        out = images_pred[0] + normals_pred[0]
+        return out
 
 
 if __name__ == "__main__":
     import argparse
     import matplotlib.pyplot as plt
+    import cv2
+    import numpy as np
 
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=str, help="input image path")
@@ -217,19 +227,38 @@ if __name__ == "__main__":
 
     opt = parser.parse_args()
 
-    print(f"[INFO] running model ...")
-    wonder3d = Wonder3d(opt.device)
-    input_image = Image.open(opt.input)
-    input_image = expand2square(input_image, (127, 127, 127, 0))
+    print(f"[INFO] init model ...")
+    wonder3d = Wonder3d(opt.device)  # 初始化Wonder3d模型
+
     print(f"[INFO] loading image from {opt.input} ...")
-    output = wonder3d.run_pipeline(
-        input_image,
-        opt.guidance_scale,
-        opt.steps,
-        opt.seed,
-        opt.crop_size,
-        write_image=True,
+    image = cv2.imread(opt.input, cv2.IMREAD_UNCHANGED)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, (256, 256), interpolation=cv2.INTER_AREA)
+    image = image.astype(np.float32) / 255.0
+    image = (
+        torch.from_numpy(image)
+        .permute(2, 0, 1)
+        .unsqueeze(0)
+        .contiguous()
+        .to(opt.device)
     )
-    torch.cuda.empty_cache()
-    plt.imshow(output)
+
+    wonder3d.get_img_embeds(image)
+
+    # input_image = Image.open(opt.input)
+    # input_image = expand2square(input_image, (127, 127, 127, 0))
+    # print(f"[INFO] loading image from {opt.input} ...")
+    # output = wonder3d.run_pipeline(  # 推理输入的图像
+    #     input_image,
+    #     opt.guidance_scale,
+    #     opt.steps,
+    #     opt.seed,
+    #     opt.crop_size,
+    #     write_image=True,
+    # )
+    # torch.cuda.empty_cache()
+    output = wonder3d.refine(
+        image, opt.guidance_scale, opt.steps, opt.seed, opt.crop_size
+    )
+    plt.imshow(output.float().cpu().numpy().transpose(0, 2, 3, 1))
     plt.show()
