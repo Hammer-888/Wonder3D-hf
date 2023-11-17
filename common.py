@@ -67,11 +67,13 @@ def tensor2pil(tensor):
         tensor.mul(255)
         .add_(0.5)
         .clamp_(0, 255)
+        .squeeze(0)
         .permute(1, 2, 0)
         .to("cpu", torch.uint8)
         .numpy()
     )
     img = Image.fromarray(img)
+    img = expand2square(img, (127, 127, 127, 0))
     return img
 
 
