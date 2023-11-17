@@ -190,7 +190,7 @@ class Wonder3d(nn.Module):
         images_pred = [save_image(images_pred[i]) for i in range(bsz)]
 
         out = images_pred + normals_pred
-        return out
+        return out[0]
 
 
 if __name__ == "__main__":
@@ -222,7 +222,7 @@ if __name__ == "__main__":
     input_image = Image.open(opt.input)
     input_image = expand2square(input_image, (127, 127, 127, 0))
     print(f"[INFO] loading image from {opt.input} ...")
-    outputs = wonder3d.run_pipeline(
+    output = wonder3d.run_pipeline(
         input_image,
         opt.guidance_scale,
         opt.steps,
@@ -231,7 +231,5 @@ if __name__ == "__main__":
         write_image=True,
     )
     torch.cuda.empty_cache()
-    plt.figure(len(outputs))
-    for output in outputs:
-        plt.imshow(output)
-        plt.show()
+    plt.imshow(output)
+    plt.show()
