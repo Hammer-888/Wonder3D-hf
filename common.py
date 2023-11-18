@@ -8,6 +8,7 @@ from PIL import Image
 import numpy as np
 import os
 from mvdiffusion.data.single_image_dataset import SingleImageDataset
+import torchvision.transforms.functional as TF
 
 
 @dataclass
@@ -63,16 +64,8 @@ def preprocess_data(single_image, crop_size):
 
 
 def tensor2pil(tensor):
-    img = (
-        tensor.mul(255)
-        .add_(0.5)
-        .clamp_(0, 255)
-        .squeeze(0)
-        .permute(1, 2, 0)
-        .to("cpu", torch.uint8)
-        .numpy()
-    )
-    img = Image.fromarray(img)
+    tensor = tensor.squeeze()
+    img = TF.to_pil_image(tensor, mode="RGBA")
     img = expand2square(img, (127, 127, 127, 0))
     return img
 
