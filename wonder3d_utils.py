@@ -197,6 +197,7 @@ class Wonder3d(nn.Module):
         # images_pred = [save_image(images_pred[i]) for i in range(bsz)]
 
         out = images_pred[0] + normals_pred[0]
+        output = out.unsqueeze(0)
         return out
 
 
