@@ -91,7 +91,6 @@ class Wonder3d(nn.Module):
     def get_img_embeds(self, image: torch.Tensor):
         # x: image tensor in [0, 1]
         image = tensor2pil(image)
-        image = image.to(self.device)
         self.emmbedding = image
 
     def refine(
@@ -232,8 +231,8 @@ if __name__ == "__main__":
 
     print(f"[INFO] loading image from {opt.input} ...")
     image = cv2.imread(opt.input, cv2.IMREAD_UNCHANGED)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    image = cv2.resize(image, (256, 256), interpolation=cv2.INTER_AREA)
+    # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # image = cv2.resize(image, (256, 256), interpolation=cv2.INTER_AREA)
     image = image.astype(np.float32) / 255.0
     image = (
         torch.from_numpy(image)
