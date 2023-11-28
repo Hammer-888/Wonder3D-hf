@@ -136,11 +136,11 @@ class Wonder3d(nn.Module):
         task_embeddings = torch.cat(
             [batch["normal_task_embeddings"], batch["color_task_embeddings"]], dim=0
         ).to(self.fp16)
-
+        print("task_embeddings shape:",task_embeddings.shape)
         camera_embeddings = torch.cat([camera_embeddings, task_embeddings], dim=-1).to(
             self.fp16
         )
-
+        print("camera_embeddings shape:",camera_embeddings.shape)
         # (B*Nv, 3, H, W)
         imgs_in = rearrange(imgs_in, "Nv C H W -> (Nv) C H W")
         # (B*Nv, Nce)
